@@ -1,0 +1,38 @@
+name: Check Virgin Holiday Price
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 8 * * *"
+    - cron: "0 12 * * *"
+    - cron: "0 16 * * *"
+    - cron: "0 20 * * *"
+
+jobs:
+  check-price:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get tracker code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install playwright
+          playwright install chromium
+
+      - name: Check Virgin price
+        run: python check_price.py
+
+      - name: Save price history
+        run: |
+          git config user.name "Virgin Holiday Price Tracker"
+          git config user.email "actions@github.com"
+          git add price_history.csv
+          git diff --cached --quiet || git commit -m "Update price history"
+          git push
