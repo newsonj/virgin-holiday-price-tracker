@@ -7,13 +7,13 @@ from playwright.sync_api import sync_playwright
 
 
 URL = (
-    "https://www.virginatlantic.com/holidays/options/holiday/"
-    "international-drive/sonesta-es-suites-orlando---international-drive/hotel"
+    "https://www.virginatlantic.com/holidays/search/holiday/"
+    "international-drive"
     "?CTA=AbTest_SP_Holidays"
-    "&departureDate=15-12-2027"
     "&duration=14"
     "&gateway=LHR"
     "&room=a2%2Cc4%2Cc7%2Ci2"
+    "&departureDate=14-12-2027"
 )
 
 HISTORY_FILE = "price_history.csv"
