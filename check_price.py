@@ -70,14 +70,14 @@ def main():
 
         page.wait_for_timeout(15000)
 
-print("Reading holiday price...")
+        print("Reading holiday price...")
 
-    print("PAGE TITLE:", page.title())
-    print("PAGE URL:", page.url)
-    print("PAGE CONTENT:")
-    print(page.locator("body").inner_text()[:10000])
+        print("PAGE TITLE:", page.title())
+        print("PAGE URL:", page.url)
+        print("PAGE CONTENT:")
+        print(page.locator("body").inner_text()[:10000])
 
-    price = extract_price(page)
+        price = extract_price(page)
 
         now = datetime.now(
             timezone.utc
@@ -120,4 +120,3 @@ print("Reading holiday price...")
 
 
 main()
-
