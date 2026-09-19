@@ -115,8 +115,11 @@ with sync_playwright() as p:
     print()
     print("Opening Virgin Holidays...")
 
+    # IMPORTANT:
+    # We are deliberately using a visible browser.
+    # GitHub will provide a virtual display for it.
     browser = p.chromium.launch(
-        headless=True
+        headless=False
     )
 
     page = browser.new_page(
@@ -126,6 +129,8 @@ with sync_playwright() as p:
         }
     )
 
+    print("Opening search results...")
+
     page.goto(
         URL,
         wait_until="domcontentloaded",
@@ -134,6 +139,7 @@ with sync_playwright() as p:
 
     print("Waiting for Virgin Holidays prices...")
 
+    # Virgin loads the actual holiday prices dynamically.
     page.wait_for_timeout(30000)
 
     print("Looking for target hotel...")
@@ -174,8 +180,8 @@ with sync_playwright() as p:
         print("ERROR - PRICE NOT FOUND")
         print("=" * 60)
         print()
-        print("The hotel was found, but the expected prices")
-        print("could not be extracted.")
+        print("The Sonesta hotel was found, but the expected")
+        print("price information could not be extracted.")
         print()
         print("The script will NOT guess a price.")
 
