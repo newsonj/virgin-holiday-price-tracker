@@ -16,107 +16,202 @@ URL = (
     "&departureDate=14-12-2027"
 )
 
+TARGET_HOTEL = "Sonesta ES Suites Orlando - International Drive"
 HISTORY_FILE = "price_history.csv"
 
 
-def extract_price(page):
-    text = page.locator("body").inner_text()
-
-    prices = re.findall(r"£\s?[\d,]+(?:\.\d{2})?", text)
-
-    values = []
-
-    for price in prices:
-        number = price.replace("£", "").replace(",", "").strip()
-
-        try:
-            value = float(number)
-
-            if value > 500:
-                values.append(value)
-
-        except ValueError:
-            pass
-
-    if not values:
-        raise RuntimeError("No suitable holiday price was found.")
-
-    return min(values)
+def money_to_float(value):
+    return float(
+        value.replace("£", "")
+        .replace(",", "")
+        .strip()
+    )
 
 
-def main():
-    with sync_playwright() as p:
+def find_target_card(page):
+    """
+    Find the smallest page element containing:
+    - Sonesta hotel name
+    - a per-person price
+    - a total price
+    """
 
-        browser = p.chromium.launch(
-            headless=True
-        )
+    return page.locator("body *").evaluate_all(
+        """
+        (elements, targetHotel) => {
 
-        page = browser.new_page(
-            viewport={
-                "width": 1440,
-                "height": 1000
+            const candidates = [];
+
+            for (const element of elements) {
+
+                const text = (element.innerText || "").trim();
+
+                if (!text.includes(targetHotel)) {
+                    continue;
+                }
+
+                const hasPP =
+                    /£\\s?[\\d,]+(?:\\.\\d{2})?\\s*pp\\b/i.test(text);
+
+                const hasTotal =
+                    /Total\\s+price\\s*£\\s?[\\d,]+(?:\\.\\d{2})?/i.test(text);
+
+                if (hasPP && hasTotal) {
+                    candidates.push({
+                        text: text,
+                        length: text.length
+                    });
+                }
             }
-        )
 
-        print("Opening Virgin Holidays...")
+            if (candidates.length === 0) {
+                return null;
+            }
 
-        page.goto(
-            URL,
-            wait_until="domcontentloaded",
-            timeout=120000
-        )
+            candidates.sort((a, b) => a.length - b.length);
 
-        print("Waiting for Virgin to load...")
+            return candidates[0].text;
+        }
+        """,
+        TARGET_HOTEL
+    )
 
-        page.wait_for_timeout(15000)
 
-        print("Reading holiday price...")
+def save_price_history(total_price, price_pp):
 
-        print("PAGE TITLE:", page.title())
-        print("PAGE URL:", page.url)
-        print("PAGE CONTENT:")
-        print(page.locator("body").inner_text()[:10000])
+    file_exists = os.path.exists(HISTORY_FILE)
 
-        price = extract_price(page)
+    with open(
+        HISTORY_FILE,
+        "a",
+        newline="",
+        encoding="utf-8"
+    ) as file:
 
-        now = datetime.now(
-            timezone.utc
-        ).astimezone()
+        writer = csv.writer(file)
 
-        timestamp = now.strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
+        if not file_exists:
+            writer.writerow([
+                "timestamp",
+                "hotel",
+                "price_pp",
+                "total_price"
+            ])
 
-        print(
-            f"Price found: £{price:,.2f}"
-        )
+        writer.writerow([
+            datetime.now(timezone.utc).isoformat(),
+            TARGET_HOTEL,
+            price_pp,
+            total_price
+        ])
 
-        file_exists = os.path.exists(
-            HISTORY_FILE
-        )
 
-        with open(
-            HISTORY_FILE,
-            "a",
-            newline="",
-            encoding="utf-8"
-        ) as file:
+with sync_playwright() as p:
 
-            writer = csv.writer(file)
+    print("=" * 60)
+    print("VIRGIN HOLIDAY PRICE CHECK")
+    print("=" * 60)
 
-            if not file_exists:
-                writer.writerow(
-                    ["timestamp", "price"]
-                )
+    print()
+    print("Opening Virgin Holidays...")
 
-            writer.writerow(
-                [
-                    timestamp,
-                    f"{price:.2f}"
-                ]
-            )
+    browser = p.chromium.launch(
+        headless=True
+    )
+
+    page = browser.new_page(
+        viewport={
+            "width": 1440,
+            "height": 1000
+        }
+    )
+
+    page.goto(
+        URL,
+        wait_until="domcontentloaded",
+        timeout=120000
+    )
+
+    print("Waiting for Virgin Holidays prices...")
+
+    page.wait_for_timeout(30000)
+
+    print("Looking for target hotel...")
+
+    target_card_text = find_target_card(page)
+
+    if not target_card_text:
+
+        print()
+        print("=" * 60)
+        print("ERROR - TARGET HOTEL CARD NOT FOUND")
+        print("=" * 60)
+        print()
+        print(TARGET_HOTEL)
+        print()
+        print("The script will NOT guess a price.")
 
         browser.close()
 
+        raise SystemExit(1)
 
-main()
+    pp_match = re.search(
+        r"£\s?([\d,]+(?:\.\d{2})?)\s*pp\b",
+        target_card_text,
+        re.IGNORECASE
+    )
+
+    total_match = re.search(
+        r"Total\s+price\s*£\s?([\d,]+(?:\.\d{2})?)",
+        target_card_text,
+        re.IGNORECASE
+    )
+
+    if not pp_match or not total_match:
+
+        print()
+        print("=" * 60)
+        print("ERROR - PRICE NOT FOUND")
+        print("=" * 60)
+        print()
+        print("The hotel was found, but the expected prices")
+        print("could not be extracted.")
+        print()
+        print("The script will NOT guess a price.")
+
+        browser.close()
+
+        raise SystemExit(1)
+
+    price_pp = money_to_float(
+        pp_match.group(1)
+    )
+
+    total_price = money_to_float(
+        total_match.group(1)
+    )
+
+    print()
+    print("=" * 60)
+    print("TARGET HOTEL PRICE")
+    print("=" * 60)
+
+    print()
+    print(f"Hotel: {TARGET_HOTEL}")
+    print(f"Price per person: £{price_pp:,.2f}")
+    print(f"Total price: £{total_price:,.2f}")
+
+    save_price_history(
+        total_price,
+        price_pp
+    )
+
+    print()
+    print("Price saved to price_history.csv")
+
+    print()
+    print("=" * 60)
+    print("CHECK COMPLETE")
+    print("=" * 60)
+
+    browser.close()
